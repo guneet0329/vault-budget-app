@@ -1,97 +1,114 @@
-This is a new [**React Native**](https://reactnative.dev) project, bootstrapped using [`@react-native-community/cli`](https://github.com/react-native-community/cli).
+# 💰 Vault — Personal Budget App
 
-# Getting Started
+A React Native Android budget app built for real personal finance tracking. No subscriptions, no cloud, everything stored locally on-device via SQLite.
 
-> **Note**: Make sure you have completed the [Set Up Your Environment](https://reactnative.dev/docs/set-up-your-environment) guide before proceeding.
+## Screenshots
 
-## Step 1: Start Metro
+> Add screenshots here once you have them
 
-First, you will need to run **Metro**, the JavaScript build tool for React Native.
+## Features
 
-To start the Metro dev server, run the following command from the root of your React Native project:
+### Wallets
+- Create budget wallets with monthly limits (Food, Rent, Entertainment, etc.)
+- **Nested wallet groups** — put WiFi, Hydro, and Phone under a Utilities group. The group total auto-sums from its members
+- **Fixed vs Flexible** — Fixed wallets (Rent, Phone) never show red over-budget warnings since hitting 100% is expected
+- Drag or use ↑↓ arrows to reorder wallets — order persists across restarts
 
-```sh
-# Using npm
-npm start
+### Home Screen
+- **Income allocation view** — log your biweekly or monthly pay and see exactly where it goes: bills, day-to-day spending, savings, and free cash
+- Income hidden by default with an inline 👁️ toggle
+- Stacked colour bar showing bills / spending / savings / debt payments as a share of income
 
-# OR using Yarn
-yarn start
+### Goals
+- Set savings goals (Emergency Fund, Vacation, etc.)
+- Contribute from a wallet — the deduction is tracked and reversible
+- Full contribution history with delete support
+
+### Debts
+- Track money lent and borrowed
+- Link a wallet to a borrowed debt — settling it auto-deducts from the wallet
+
+### Gift Cards
+- Add gift cards with balance, store, expiry date, and a note
+- Record partial use, track remaining balance
+- Expiry warnings when a card is within 7 days of expiring
+- Home screen reminder so you never forget you have them
+
+### Notifications
+- Daily 8pm reminder to log expenses (fires once, no stacking)
+- Budget alerts at 80%, 90%, and 100% for flexible wallets — sent once per month per wallet, not every app launch
+
+### Other
+- Dark and light theme
+- Currency support (CAD, USD, EUR, GBP, and more)
+- Custom tags on transactions
+- Full transaction history with edit, delete, and wallet reassignment
+- Analysis screen with spending charts
+- Recurring expense engine
+
+## Stack
+
+| Layer | Technology |
+|-------|-----------|
+| Framework | React Native CLI (Android) |
+| Database | SQLite via `@op-engineering/op-sqlite` v15 |
+| Notifications | `@notifee/react-native` |
+| Charts | `react-native-svg` |
+| Navigation | Custom bottom tab + drawer (no React Navigation) |
+| State | `useState` / `useCallback` in App.js — no Redux |
+
+## Getting Started
+
+```bash
+# Install dependencies
+npm install
+
+# Run on Android (with device/emulator connected)
+npx react-native run-android
+
+# Build release APK
+cd android && ./gradlew assembleRelease
 ```
 
-## Step 2: Build and run your app
+The APK will be at `android/app/build/outputs/apk/release/app-release.apk`.
 
-With Metro running, open a new terminal window/pane from the root of your React Native project, and use one of the following commands to build and run your Android or iOS app:
+## Project Structure
 
-### Android
-
-```sh
-# Using npm
-npm run android
-
-# OR using Yarn
-yarn android
+```
+src/
+├── components/
+│   ├── WalletCard.js       # Standalone, parent group, and child wallet cards
+│   ├── EmojiPicker.js      # Shared collapsible emoji picker
+│   ├── AddExpenseModal.js
+│   ├── Drawer.js
+│   └── ...
+├── screens/
+│   ├── HomeScreen.js       # Income allocation dashboard
+│   ├── WalletsScreen.js    # Wallet list with nested groups
+│   ├── ManageWalletsScreen.js
+│   ├── GoalsScreen.js
+│   ├── DebtScreen.js
+│   ├── GiftCardsScreen.js
+│   ├── IncomeScreen.js
+│   ├── TransactionsScreen.js
+│   ├── AnalysisScreen.js
+│   └── ...
+├── services/
+│   ├── notifications.js    # Notifee budget alerts (DB-persisted dedup)
+│   ├── recurring.js        # Recurring expense engine
+│   └── insights.js         # Streak and analytics calculations
+├── storage/
+│   └── store.js            # All SQLite CRUD — single source of truth
+├── theme.js                # Colors, palette, emoji list, currencies
+└── ThemeContext.js         # Dark/light theme provider
 ```
 
-### iOS
+## Notes
 
-For iOS, remember to install CocoaPods dependencies (this only needs to be run on first clone or after updating native deps).
+- Built for Android; iOS untested
+- All data is local — no backend, no accounts, no analytics
+- SQLite schema migrations are safe (ALTER TABLE wrapped in try/catch)
 
-The first time you create a new project, run the Ruby bundler to install CocoaPods itself:
+## License
 
-```sh
-bundle install
-```
-
-Then, and every time you update your native dependencies, run:
-
-```sh
-bundle exec pod install
-```
-
-For more information, please visit [CocoaPods Getting Started guide](https://guides.cocoapods.org/using/getting-started.html).
-
-```sh
-# Using npm
-npm run ios
-
-# OR using Yarn
-yarn ios
-```
-
-If everything is set up correctly, you should see your new app running in the Android Emulator, iOS Simulator, or your connected device.
-
-This is one way to run your app — you can also build it directly from Android Studio or Xcode.
-
-## Step 3: Modify your app
-
-Now that you have successfully run the app, let's make changes!
-
-Open `App.tsx` in your text editor of choice and make some changes. When you save, your app will automatically update and reflect these changes — this is powered by [Fast Refresh](https://reactnative.dev/docs/fast-refresh).
-
-When you want to forcefully reload, for example to reset the state of your app, you can perform a full reload:
-
-- **Android**: Press the <kbd>R</kbd> key twice or select **"Reload"** from the **Dev Menu**, accessed via <kbd>Ctrl</kbd> + <kbd>M</kbd> (Windows/Linux) or <kbd>Cmd ⌘</kbd> + <kbd>M</kbd> (macOS).
-- **iOS**: Press <kbd>R</kbd> in iOS Simulator.
-
-## Congratulations! :tada:
-
-You've successfully run and modified your React Native App. :partying_face:
-
-### Now what?
-
-- If you want to add this new React Native code to an existing application, check out the [Integration guide](https://reactnative.dev/docs/integration-with-existing-apps).
-- If you're curious to learn more about React Native, check out the [docs](https://reactnative.dev/docs/getting-started).
-
-# Troubleshooting
-
-If you're having issues getting the above steps to work, see the [Troubleshooting](https://reactnative.dev/docs/troubleshooting) page.
-
-# Learn More
-
-To learn more about React Native, take a look at the following resources:
-
-- [React Native Website](https://reactnative.dev) - learn more about React Native.
-- [Getting Started](https://reactnative.dev/docs/environment-setup) - an **overview** of React Native and how setup your environment.
-- [Learn the Basics](https://reactnative.dev/docs/getting-started) - a **guided tour** of the React Native **basics**.
-- [Blog](https://reactnative.dev/blog) - read the latest official React Native **Blog** posts.
-- [`@facebook/react-native`](https://github.com/facebook/react-native) - the Open Source; GitHub **repository** for React Native.
+MIT

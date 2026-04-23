@@ -92,6 +92,12 @@ android {
             keyAlias 'androiddebugkey'
             keyPassword 'android'
         }
+        release {
+            storeFile file('vault-release.keystore')
+            storePassword 'guneet'
+            keyAlias 'vault'
+            keyPassword 'guneet'
+        }
     }
     buildTypes {
         debug {

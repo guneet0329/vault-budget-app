@@ -10,10 +10,21 @@
     "test": "jest"
   },
   "dependencies": {
+    "@notifee/react-native": "^9.1.8",
+    "@op-engineering/op-sqlite": "^15.2.10",
+    "@react-native/new-app-screen": "0.84.1",
+    "@react-navigation/bottom-tabs": "^7.15.9",
+    "@react-navigation/native": "^7.2.2",
+    "date-fns": "^4.1.0",
     "react": "19.2.3",
     "react-native": "0.84.1",
-    "@react-native/new-app-screen": "0.84.1",
-    "react-native-safe-area-context": "^5.5.2"
+    "react-native-biometrics": "^3.0.1",
+    "react-native-draglist": "^3.10.0",
+    "react-native-fs": "^2.20.0",
+    "react-native-image-picker": "^8.2.1",
+    "react-native-safe-area-context": "^5.7.0",
+    "react-native-screens": "^4.24.0",
+    "react-native-svg": "^15.15.4"
   },
   "devDependencies": {
     "@babel/core": "^7.25.2",
