@@ -2,10 +2,6 @@
 
 A React Native Android budget app built for real personal finance tracking. No subscriptions, no cloud, everything stored locally on-device via SQLite.
 
-## Screenshots
-
-> Add screenshots here once you have them
-
 ## Features
 
 ### Wallets
@@ -45,6 +41,13 @@ A React Native Android budget app built for real personal finance tracking. No s
 - Full transaction history with edit, delete, and wallet reassignment
 - Analysis screen with spending charts
 - Recurring expense engine
+
+## Screenshots
+
+<p align="center">
+  <img width="23%" alt="Home" src="https://github.com/user-attachments/assets/ee7f71fb-2afb-4609-a133-a4ff4bae957d" />
+  <img width="23%" alt="Features" src="https://github.com/user-attachments/assets/e61326ff-3ee7-4274-8c98-cdb6ca7143db" />
+</p>
 
 ## Stack
 
@@ -111,4 +114,4 @@ src/
 
 ## License
 
-MIT
+[MIT](./LICENSE)
