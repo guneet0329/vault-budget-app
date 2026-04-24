@@ -45,7 +45,7 @@ function FlowRow({ label, sub, value, color, bg, sym, hide, onPress, isLast }) {
 }
 
 export default function HomeScreen({
-  wallets, transactions, income, debts, goals, giftCards,
+  wallets, transactions, income, debts, goals, giftCards, accounts,
   currentMonth, onOpenDrawer, onNavigate, currency, isDark,
   onAddExpense, customTags, onCreateTag,
 }) {
@@ -475,6 +475,7 @@ export default function HomeScreen({
         currency={currency}
         customTags={customTags || []}
         onCreateTag={onCreateTag || (() => {})}
+        accounts={accounts || []}
       />
     </View>
   );

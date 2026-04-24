@@ -177,20 +177,35 @@ function AppInner({ seed }) {
   // ── Expense mutations ─────────────────────────────────────────────────────
   const addExpense = useCallback((splits, desc, extra = {}) => {
     try {
-      const { tags = [], note = '', photo = null, frequency = 'once', date } = extra;
+      const { tags = [], note = '', photo = null, frequency = 'once', date, accountId = null } = extra;
       const txnDate = date || Date.now();
-      const currentWallets = loadWallets();
+      const currentWallets  = loadWallets();
+      const currentAccounts = loadAccounts();
       splits.forEach((sp, idx) => {
-        insertTransaction({ id: `txn_${txnDate}_${idx}_${Math.random()}`, walletId: sp.walletId ?? null, amount: sp.amount, desc: desc || 'Expense', note, tags, photo, frequency, isRecurring: false, date: txnDate });
+        insertTransaction({
+          id: `txn_${txnDate}_${idx}_${Math.random()}`,
+          walletId:   sp.walletId ?? null,
+          accountId:  accountId,
+          transactionType: 'expense',
+          amount: sp.amount, desc: desc || 'Expense',
+          note, tags, photo, frequency, isRecurring: false, date: txnDate,
+        });
+        // Deduct from wallet budget
         if (sp.walletId) {
           const w = currentWallets.find(w => w.id === sp.walletId);
           updateWalletSpent(sp.walletId, Math.round(((w?.spent ?? 0) + sp.amount) * 100) / 100);
+        }
+        // Deduct from account balance
+        if (accountId) {
+          const acc = currentAccounts.find(a => a.id === accountId);
+          if (acc) updateAccountBalance(accountId, Math.round((acc.balance - sp.amount) * 100) / 100);
         }
         if (frequency !== 'once' && sp.walletId) {
           insertRecurring({ id: `rec_${txnDate}_${idx}`, name: desc || 'Recurring', walletId: sp.walletId, amount: sp.amount, frequency, lastApplied: new Date(txnDate).toISOString().slice(0, 10), tags });
         }
       });
       setWallets(loadWallets());
+      setAccounts(loadAccounts());
       setTransactions(loadTransactions());
       if (extra.frequency !== 'once') setRecurring(loadRecurring());
     } catch (e) { Alert.alert('Error saving expense', e.message); }
@@ -372,7 +387,7 @@ function AppInner({ seed }) {
   }
 
   const currency   = settings.currency ?? { code: 'USD', symbol: '$', name: 'US Dollar' };
-  const shared     = { wallets, transactions, currentMonth, currency };
+  const shared     = { wallets, transactions, currentMonth, currency, accounts };
   const walletOps  = { onAddWallet: addWallet, onEditWallet: editWallet, onDeleteWallet: deleteWallet, onReorderWallets: reorderWalletsCb };
 
   const drawerItems = [
@@ -395,7 +410,7 @@ function AppInner({ seed }) {
         return (
           <HomeScreen
             {...shared}
-            income={income} debts={debts} goals={goals} giftCards={giftCards}
+            income={income} debts={debts} goals={goals} giftCards={giftCards} accounts={accounts}
             onOpenDrawer={() => setDrawerOpen(true)}
             onNavigate={setActiveTab}
             isDark={isDark}

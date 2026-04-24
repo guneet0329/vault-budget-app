@@ -13,7 +13,7 @@ import { radius } from '../theme';
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 
 export default function WalletsScreen({
-  wallets, transactions,
+  wallets, transactions, accounts,
   onAddExpense, onAddWallet, onEditWallet, onDeleteWallet, onReorderWallets,
   currentMonth, onMonthChange, onOpenDrawer, currency,
   customTags, onCreateTag,
@@ -255,6 +255,7 @@ export default function WalletsScreen({
         currency={currency}
         customTags={customTags || []}
         onCreateTag={onCreateTag || (() => {})}
+        accounts={accounts || []}
       />
     </View>
   );
