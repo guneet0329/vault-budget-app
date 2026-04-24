@@ -15,6 +15,7 @@ import DebtScreen         from './src/screens/DebtScreen';
 import InsightsScreen     from './src/screens/InsightsScreen';
 import TransactionsScreen from './src/screens/TransactionsScreen';
 import GiftCardsScreen   from './src/screens/GiftCardsScreen';
+import AccountsScreen    from './src/screens/AccountsScreen';
 import Drawer             from './src/components/Drawer';
 
 import {
@@ -50,7 +51,7 @@ const NAV_TABS = [
 ];
 
 // Drawer-only screens — back navigates to Home
-const DRAWER_SCREENS = ['Goals','Income','Debts','Insights','Transactions','GiftCards'];
+const DRAWER_SCREENS = ['Goals','Income','Debts','Insights','Transactions','GiftCards','Accounts'];
 
 function BottomNav({ active, onPress }) {
   const insets = useSafeAreaInsets();
@@ -380,6 +381,7 @@ function AppInner({ seed }) {
     { id: 'Transactions', icon: '📋', label: 'Transactions', sub: 'All expenses'     },
     { id: 'Analysis',     icon: '📊', label: 'Analysis',     sub: 'Charts & stats'   },
     { id: 'Insights',     icon: '🧠', label: 'Insights',     sub: 'Smart suggestions'},
+    { id: 'Accounts',     icon: '🏦', label: 'Accounts',    sub: 'Balances & net worth' },
     { id: 'GiftCards',    icon: '🎁', label: 'Gift Cards',  sub: 'Track stored value'   },
     { id: 'Goals',        icon: '🎯', label: 'Goals',        sub: 'Savings goals'    },
     { id: 'Income',       icon: '💼', label: 'Income',       sub: 'Income tracking'  },
@@ -417,6 +419,18 @@ function AppInner({ seed }) {
         return <AnalysisScreen {...shared} customTags={customTags} />;
       case 'Insights':
         return <InsightsScreen {...shared} income={income} prevMonthData={prevMonth} onApplySuggestion={applySuggestion} />;
+      case 'Accounts':
+        return (
+          <AccountsScreen
+            accounts={accounts}
+            transactions={transactions}
+            currency={currency}
+            onAddAccount={addAccount}
+            onEditAccount={editAccount}
+            onDeleteAccount={deleteAccount}
+            onTransfer={makeTransfer}
+          />
+        );
       case 'GiftCards':
         return (
           <GiftCardsScreen
