@@ -31,6 +31,8 @@ import {
   loadGoals,            insertGoal,              updateGoalSaved,      updateGoalDetails,
   deleteGoalById,       insertGoalProgress,      loadGoalProgress,     deleteGoalProgressEntry,
   loadGiftCards,        insertGiftCard,          updateGiftCardBalance, deleteGiftCardById,
+  loadAccounts,         insertAccount,           updateAccount,
+  updateAccountBalance, deleteAccountById,       insertTransfer,        netWorth,
   loadCustomTags,       insertCustomTag,         deleteCustomTag,
 } from './src/storage/store';
 
@@ -83,6 +85,7 @@ function AppInner({ seed }) {
   const [customTags,    setCustomTags]    = useState(seed.customTags);
   const [goals,         setGoals]         = useState(seed.goals);
   const [giftCards,     setGiftCards]     = useState(seed.giftCards);
+  const [accounts,      setAccounts]      = useState(seed.accounts);
   const [activeTab,     setActiveTab]     = useState('Home');
   const [drawerOpen,    setDrawerOpen]    = useState(false);
   const [hideNumbers,   setHideNumbers]   = useState(seed.settings.hideNumbers ?? false);
@@ -310,6 +313,26 @@ function AppInner({ seed }) {
     try { deleteGiftCardById(id); setGiftCards(loadGiftCards()); } catch {}
   }, []);
 
+  // ── Accounts ──────────────────────────────────────────────────────────────
+  const addAccount = useCallback((a) => {
+    try { insertAccount(a); setAccounts(loadAccounts()); }
+    catch (e) { Alert.alert('Error', e.message); }
+  }, []);
+  const editAccount = useCallback((id, a) => {
+    try { updateAccount(id, a); setAccounts(loadAccounts()); }
+    catch (e) { Alert.alert('Error', e.message); }
+  }, []);
+  const deleteAccount = useCallback((id) => {
+    try { deleteAccountById(id); setAccounts(loadAccounts()); } catch {}
+  }, []);
+  const makeTransfer = useCallback((data) => {
+    try {
+      insertTransfer(data);
+      setAccounts(loadAccounts());
+      setTransactions(loadTransactions());
+    } catch (e) { Alert.alert('Error', e.message); }
+  }, []);
+
   // ── Recurring ─────────────────────────────────────────────────────────────
   const deleteRecurring = useCallback((id) => { try { deleteRecurringById(id); setRecurring(loadRecurring()); } catch {} }, []);
   const toggleRecurring = useCallback((id) => { try { toggleRecurringActive(id); setRecurring(loadRecurring()); } catch {} }, []);
@@ -478,7 +501,8 @@ export default function App() {
       const customTags   = loadCustomTags();
       const goals        = loadGoals();
       const giftCards    = loadGiftCards();
-      setState({ status: 'ready', seed: { settings, wallets, transactions, income, debts, recurring, prevMonth, customTags, goals, giftCards }, error: null });
+      const accounts     = loadAccounts();
+      setState({ status: 'ready', seed: { settings, wallets, transactions, income, debts, recurring, prevMonth, customTags, goals, giftCards, accounts }, error: null });
     } catch (e) {
       console.error('[App] initDb:', e);
       setState({ status: 'error', seed: null, error: e.message });
