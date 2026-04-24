@@ -15,6 +15,7 @@ import DebtScreen         from './src/screens/DebtScreen';
 import InsightsScreen     from './src/screens/InsightsScreen';
 import TransactionsScreen from './src/screens/TransactionsScreen';
 import GiftCardsScreen   from './src/screens/GiftCardsScreen';
+import AccountsScreen    from './src/screens/AccountsScreen';
 import Drawer             from './src/components/Drawer';
 
 import {
@@ -31,6 +32,8 @@ import {
   loadGoals,            insertGoal,              updateGoalSaved,      updateGoalDetails,
   deleteGoalById,       insertGoalProgress,      loadGoalProgress,     deleteGoalProgressEntry,
   loadGiftCards,        insertGiftCard,          updateGiftCardBalance, deleteGiftCardById,
+  loadAccounts,         insertAccount,           updateAccount,
+  updateAccountBalance, deleteAccountById,       insertTransfer,        netWorth,
   loadCustomTags,       insertCustomTag,         deleteCustomTag,
 } from './src/storage/store';
 
@@ -48,7 +51,7 @@ const NAV_TABS = [
 ];
 
 // Drawer-only screens — back navigates to Home
-const DRAWER_SCREENS = ['Goals','Income','Debts','Insights','Transactions','GiftCards'];
+const DRAWER_SCREENS = ['Goals','Income','Debts','Insights','Transactions','GiftCards','Accounts'];
 
 function BottomNav({ active, onPress }) {
   const insets = useSafeAreaInsets();
@@ -83,6 +86,7 @@ function AppInner({ seed }) {
   const [customTags,    setCustomTags]    = useState(seed.customTags);
   const [goals,         setGoals]         = useState(seed.goals);
   const [giftCards,     setGiftCards]     = useState(seed.giftCards);
+  const [accounts,      setAccounts]      = useState(seed.accounts);
   const [activeTab,     setActiveTab]     = useState('Home');
   const [drawerOpen,    setDrawerOpen]    = useState(false);
   const [hideNumbers,   setHideNumbers]   = useState(seed.settings.hideNumbers ?? false);
@@ -173,20 +177,35 @@ function AppInner({ seed }) {
   // ── Expense mutations ─────────────────────────────────────────────────────
   const addExpense = useCallback((splits, desc, extra = {}) => {
     try {
-      const { tags = [], note = '', photo = null, frequency = 'once', date } = extra;
+      const { tags = [], note = '', photo = null, frequency = 'once', date, accountId = null } = extra;
       const txnDate = date || Date.now();
-      const currentWallets = loadWallets();
+      const currentWallets  = loadWallets();
+      const currentAccounts = loadAccounts();
       splits.forEach((sp, idx) => {
-        insertTransaction({ id: `txn_${txnDate}_${idx}_${Math.random()}`, walletId: sp.walletId ?? null, amount: sp.amount, desc: desc || 'Expense', note, tags, photo, frequency, isRecurring: false, date: txnDate });
+        insertTransaction({
+          id: `txn_${txnDate}_${idx}_${Math.random()}`,
+          walletId:   sp.walletId ?? null,
+          accountId:  accountId,
+          transactionType: 'expense',
+          amount: sp.amount, desc: desc || 'Expense',
+          note, tags, photo, frequency, isRecurring: false, date: txnDate,
+        });
+        // Deduct from wallet budget
         if (sp.walletId) {
           const w = currentWallets.find(w => w.id === sp.walletId);
           updateWalletSpent(sp.walletId, Math.round(((w?.spent ?? 0) + sp.amount) * 100) / 100);
+        }
+        // Deduct from account balance
+        if (accountId) {
+          const acc = currentAccounts.find(a => a.id === accountId);
+          if (acc) updateAccountBalance(accountId, Math.round((acc.balance - sp.amount) * 100) / 100);
         }
         if (frequency !== 'once' && sp.walletId) {
           insertRecurring({ id: `rec_${txnDate}_${idx}`, name: desc || 'Recurring', walletId: sp.walletId, amount: sp.amount, frequency, lastApplied: new Date(txnDate).toISOString().slice(0, 10), tags });
         }
       });
       setWallets(loadWallets());
+      setAccounts(loadAccounts());
       setTransactions(loadTransactions());
       if (extra.frequency !== 'once') setRecurring(loadRecurring());
     } catch (e) { Alert.alert('Error saving expense', e.message); }
@@ -310,6 +329,26 @@ function AppInner({ seed }) {
     try { deleteGiftCardById(id); setGiftCards(loadGiftCards()); } catch {}
   }, []);
 
+  // ── Accounts ──────────────────────────────────────────────────────────────
+  const addAccount = useCallback((a) => {
+    try { insertAccount(a); setAccounts(loadAccounts()); }
+    catch (e) { Alert.alert('Error', e.message); }
+  }, []);
+  const editAccount = useCallback((id, a) => {
+    try { updateAccount(id, a); setAccounts(loadAccounts()); }
+    catch (e) { Alert.alert('Error', e.message); }
+  }, []);
+  const deleteAccount = useCallback((id) => {
+    try { deleteAccountById(id); setAccounts(loadAccounts()); } catch {}
+  }, []);
+  const makeTransfer = useCallback((data) => {
+    try {
+      insertTransfer(data);
+      setAccounts(loadAccounts());
+      setTransactions(loadTransactions());
+    } catch (e) { Alert.alert('Error', e.message); }
+  }, []);
+
   // ── Recurring ─────────────────────────────────────────────────────────────
   const deleteRecurring = useCallback((id) => { try { deleteRecurringById(id); setRecurring(loadRecurring()); } catch {} }, []);
   const toggleRecurring = useCallback((id) => { try { toggleRecurringActive(id); setRecurring(loadRecurring()); } catch {} }, []);
@@ -348,7 +387,7 @@ function AppInner({ seed }) {
   }
 
   const currency   = settings.currency ?? { code: 'USD', symbol: '$', name: 'US Dollar' };
-  const shared     = { wallets, transactions, currentMonth, currency };
+  const shared     = { wallets, transactions, currentMonth, currency, accounts };
   const walletOps  = { onAddWallet: addWallet, onEditWallet: editWallet, onDeleteWallet: deleteWallet, onReorderWallets: reorderWalletsCb };
 
   const drawerItems = [
@@ -357,6 +396,7 @@ function AppInner({ seed }) {
     { id: 'Transactions', icon: '📋', label: 'Transactions', sub: 'All expenses'     },
     { id: 'Analysis',     icon: '📊', label: 'Analysis',     sub: 'Charts & stats'   },
     { id: 'Insights',     icon: '🧠', label: 'Insights',     sub: 'Smart suggestions'},
+    { id: 'Accounts',     icon: '🏦', label: 'Accounts',    sub: 'Balances & net worth' },
     { id: 'GiftCards',    icon: '🎁', label: 'Gift Cards',  sub: 'Track stored value'   },
     { id: 'Goals',        icon: '🎯', label: 'Goals',        sub: 'Savings goals'    },
     { id: 'Income',       icon: '💼', label: 'Income',       sub: 'Income tracking'  },
@@ -370,7 +410,7 @@ function AppInner({ seed }) {
         return (
           <HomeScreen
             {...shared}
-            income={income} debts={debts} goals={goals} giftCards={giftCards}
+            income={income} debts={debts} goals={goals} giftCards={giftCards} accounts={accounts}
             onOpenDrawer={() => setDrawerOpen(true)}
             onNavigate={setActiveTab}
             isDark={isDark}
@@ -394,6 +434,18 @@ function AppInner({ seed }) {
         return <AnalysisScreen {...shared} customTags={customTags} />;
       case 'Insights':
         return <InsightsScreen {...shared} income={income} prevMonthData={prevMonth} onApplySuggestion={applySuggestion} />;
+      case 'Accounts':
+        return (
+          <AccountsScreen
+            accounts={accounts}
+            transactions={transactions}
+            currency={currency}
+            onAddAccount={addAccount}
+            onEditAccount={editAccount}
+            onDeleteAccount={deleteAccount}
+            onTransfer={makeTransfer}
+          />
+        );
       case 'GiftCards':
         return (
           <GiftCardsScreen
@@ -478,7 +530,8 @@ export default function App() {
       const customTags   = loadCustomTags();
       const goals        = loadGoals();
       const giftCards    = loadGiftCards();
-      setState({ status: 'ready', seed: { settings, wallets, transactions, income, debts, recurring, prevMonth, customTags, goals, giftCards }, error: null });
+      const accounts     = loadAccounts();
+      setState({ status: 'ready', seed: { settings, wallets, transactions, income, debts, recurring, prevMonth, customTags, goals, giftCards, accounts }, error: null });
     } catch (e) {
       console.error('[App] initDb:', e);
       setState({ status: 'error', seed: null, error: e.message });

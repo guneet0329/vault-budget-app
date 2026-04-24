@@ -45,7 +45,7 @@ function FlowRow({ label, sub, value, color, bg, sym, hide, onPress, isLast }) {
 }
 
 export default function HomeScreen({
-  wallets, transactions, income, debts, goals, giftCards,
+  wallets, transactions, income, debts, goals, giftCards, accounts,
   currentMonth, onOpenDrawer, onNavigate, currency, isDark,
   onAddExpense, customTags, onCreateTag,
 }) {
@@ -61,6 +61,11 @@ export default function HomeScreen({
   const monthTxns = useMemo(
     () => transactions.filter(t => t.date >= start && t.date <= end),
     [transactions, currentMonth]
+  );
+  // Exclude transfers from spending calculations — they are account movements, not expenses
+  const spendingTxns = useMemo(
+    () => monthTxns.filter(t => t.transactionType !== 'transfer'),
+    [monthTxns]
   );
 
   const now      = new Date();
@@ -95,14 +100,14 @@ export default function HomeScreen({
 
   // ── Savings (goal contributions this month) ───────────────────────────────
   const savedThisMonth = useMemo(
-    () => monthTxns.filter(t => t.tags?.includes('#goals')).reduce((s, t) => s + t.amount, 0),
-    [monthTxns]
+    () => spendingTxns.filter(t => t.tags?.includes('#goals')).reduce((s, t) => s + t.amount, 0),
+    [spendingTxns]
   );
 
   // ── Debt payments this month ──────────────────────────────────────────────
   const debtPaidMonth = useMemo(
-    () => monthTxns.filter(t => t.tags?.includes('#debt')).reduce((s, t) => s + t.amount, 0),
-    [monthTxns]
+    () => spendingTxns.filter(t => t.tags?.includes('#debt')).reduce((s, t) => s + t.amount, 0),
+    [spendingTxns]
   );
 
   // ── Free cash: income − bills − flex spending − savings − debt payments ───
@@ -110,6 +115,14 @@ export default function HomeScreen({
   const allocated  = totalBills + totalFlexSpent + savedThisMonth + debtPaidMonth;
   const freeCash   = totalIncome - allocated;
   const hasIncome  = totalIncome > 0;
+
+  // ── Net worth from accounts ───────────────────────────────────────────────
+  const { netWorth, hasAccounts } = useMemo(() => {
+    if (!accounts?.length) return { netWorth: 0, hasAccounts: false };
+    const assets      = accounts.filter(a => a.type !== 'credit').reduce((s, a) => s + a.balance, 0);
+    const liabilities = accounts.filter(a => a.type === 'credit').reduce((s, a) => s + Math.abs(a.balance), 0);
+    return { netWorth: assets - liabilities, hasAccounts: true };
+  }, [accounts]);
 
   // ── Wallet alerts (flexible only, at 70%+) ────────────────────────────────
   const alertWallets = leafWallets.filter(w => w.billType !== 'fixed')
@@ -147,6 +160,72 @@ export default function HomeScreen({
       </View>
 
       <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 110 }} showsVerticalScrollIndicator={false}>
+
+        {/* ── Net worth + account balances ── */}
+        {hasAccounts && (
+          <View style={{ marginBottom: 14 }}>
+            {/* Net worth summary row */}
+            <TouchableOpacity
+              style={[{ backgroundColor: colors.surface, borderRadius: radius.lg, padding: 16, marginBottom: 8, flexDirection: 'row', alignItems: 'center' }, shadow.sm]}
+              onPress={() => onNavigate('Accounts')}
+              activeOpacity={0.85}
+            >
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: colors.text3, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                  Net Worth
+                </Text>
+                <Text style={{ fontSize: 28, fontWeight: '800', color: netWorth >= 0 ? colors.teal : colors.red, marginTop: 3 }}>
+                  {netWorth < 0 ? '-' : ''}{sym}{Math.abs(netWorth).toLocaleString('en-CA', { minimumFractionDigits: 0 })}
+                </Text>
+              </View>
+              <View style={{ alignItems: 'flex-end', gap: 4 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.teal }} />
+                  <Text style={{ fontSize: 11, color: colors.text3 }}>
+                    Assets {sym}{accounts.filter(a => a.type !== 'credit').reduce((s, a) => s + a.balance, 0).toLocaleString('en-CA', { minimumFractionDigits: 0 })}
+                  </Text>
+                </View>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: colors.red }} />
+                  <Text style={{ fontSize: 11, color: colors.text3 }}>
+                    Owed {sym}{accounts.filter(a => a.type === 'credit').reduce((s, a) => s + Math.abs(a.balance), 0).toLocaleString('en-CA', { minimumFractionDigits: 0 })}
+                  </Text>
+                </View>
+              </View>
+              <Text style={{ fontSize: 16, color: colors.text3, marginLeft: 10 }}>›</Text>
+            </TouchableOpacity>
+
+            {/* Individual account balance chips */}
+            <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+              <View style={{ flexDirection: 'row', gap: 8, paddingHorizontal: 2 }}>
+                {accounts.map(a => {
+                  const isCredit  = a.type === 'credit';
+                  const balColor  = isCredit ? colors.red : a.balance < 0 ? colors.red : colors.text;
+                  const bgColor   = isCredit ? colors.redLight : colors.surface;
+                  return (
+                    <TouchableOpacity
+                      key={a.id}
+                      style={[{ backgroundColor: bgColor, borderRadius: radius.md, padding: 12, minWidth: 110, alignItems: 'flex-start' }, shadow.sm]}
+                      onPress={() => onNavigate('Accounts')}
+                      activeOpacity={0.8}
+                    >
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginBottom: 6 }}>
+                        <Text style={{ fontSize: 16 }}>{a.emoji}</Text>
+                        <Text style={{ fontSize: 11, fontWeight: '600', color: colors.text3 }} numberOfLines={1}>{a.name}</Text>
+                      </View>
+                      <Text style={{ fontSize: 17, fontWeight: '800', color: balColor }}>
+                        {isCredit ? '-' : ''}{sym}{Math.abs(a.balance).toLocaleString('en-CA', { minimumFractionDigits: 0 })}
+                      </Text>
+                      {isCredit && (
+                        <Text style={{ fontSize: 9, color: colors.red, marginTop: 2 }}>outstanding</Text>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })}
+              </View>
+            </ScrollView>
+          </View>
+        )}
 
         {/* ── Income allocation card ── */}
         {hasIncome ? (
@@ -408,29 +487,35 @@ export default function HomeScreen({
             </View>
             <View style={[{ backgroundColor: colors.surface, borderRadius: radius.lg, overflow: 'hidden' }, shadow.sm]}>
               {monthTxns.slice(0, 5).map((t, i) => {
-                const w        = wallets.find(w => w.id === t.walletId);
-                const isGoal   = t.tags?.includes('#goals');
-                const isDebt   = t.tags?.includes('#debt');
-                const label    = isGoal ? '🎯 ' : isDebt ? '🤝 ' : '';
-                const rowColor = isGoal ? colors.purple : isDebt ? colors.amber : colors.red;
+                const w          = wallets.find(w => w.id === t.walletId);
+                const acc        = accounts?.find(a => a.id === t.accountId);
+                const toAcc      = accounts?.find(a => a.id === t.toAccountId);
+                const isGoal     = t.tags?.includes('#goals');
+                const isDebt     = t.tags?.includes('#debt');
+                const isTransfer = t.transactionType === 'transfer';
+                const icon       = isTransfer ? '⇄' : isGoal ? '🎯' : isDebt ? '🤝' : w?.emoji || '💸';
+                const iconBg     = isTransfer ? colors.blueLight : w ? w.color + '22' : colors.surface2;
+                const rowColor   = isTransfer ? colors.blue : isGoal ? colors.purple : isDebt ? colors.amber : colors.red;
+                const sign       = isTransfer ? '' : isGoal || isDebt ? '+' : '-';
+                const subLabel   = isTransfer
+                  ? `${acc?.name ?? '?'} → ${toAcc?.name ?? '?'}`
+                  : `${w?.name || 'Unassigned'}${acc ? ' · ' + acc.emoji : ''} · ${new Date(t.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
                 return (
                   <View
                     key={t.id}
                     style={{ flexDirection: 'row', alignItems: 'center', gap: 12, padding: 14, borderBottomWidth: i < Math.min(monthTxns.length, 5) - 1 ? 1 : 0, borderBottomColor: colors.border }}
                   >
-                    <View style={{ width: 34, height: 34, borderRadius: 9, backgroundColor: w ? w.color + '22' : colors.surface2, alignItems: 'center', justifyContent: 'center' }}>
-                      <Text style={{ fontSize: 15 }}>{isGoal ? '🎯' : isDebt ? '🤝' : w?.emoji || '💸'}</Text>
+                    <View style={{ width: 34, height: 34, borderRadius: 9, backgroundColor: iconBg, alignItems: 'center', justifyContent: 'center' }}>
+                      <Text style={{ fontSize: isTransfer ? 14 : 15 }}>{icon}</Text>
                     </View>
                     <View style={{ flex: 1 }}>
                       <Text style={{ fontSize: 13, fontWeight: '600', color: colors.text }} numberOfLines={1}>
-                        {label}{t.desc || 'Expense'}
+                        {t.desc || (isTransfer ? 'Transfer' : 'Expense')}
                       </Text>
-                      <Text style={{ fontSize: 11, color: colors.text3, marginTop: 1 }}>
-                        {w?.name || 'Unassigned'} · {new Date(t.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
-                      </Text>
+                      <Text style={{ fontSize: 11, color: colors.text3, marginTop: 1 }}>{subLabel}</Text>
                     </View>
                     <Text style={{ fontSize: 13, fontWeight: '700', color: rowColor }}>
-                      {`${isGoal || isDebt ? '+' : '-'}${sym}${t.amount.toFixed(2)}`}
+                      {sign}{sym}{t.amount.toFixed(2)}
                     </Text>
                   </View>
                 );
@@ -475,6 +560,7 @@ export default function HomeScreen({
         currency={currency}
         customTags={customTags || []}
         onCreateTag={onCreateTag || (() => {})}
+        accounts={accounts || []}
       />
     </View>
   );

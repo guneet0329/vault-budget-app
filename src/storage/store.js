@@ -5,6 +5,12 @@
  * v4 additions:
  *   wallets.parent_id  — nested wallet support
  *   loadWallets returns parentId field
+ *
+ * v5 additions (Phase 1):
+ *   accounts           — real money containers with balances
+ *   transactions.account_id — every txn linked to an account
+ *   transfer type      — moves money between accounts, no wallet
+ *   netWorth()         — sum of all account balances
  */
 import { open } from '@op-engineering/op-sqlite';
 
@@ -144,6 +150,33 @@ export function initDb() {
     created_at INTEGER NOT NULL
   )`);
 
+  // ── v5: Accounts ─────────────────────────────────────────────────────────────
+  // Account types:
+  //   chequing    — everyday spending account
+  //   savings     — savings account
+  //   credit      — credit card (liability — balance is what you OWE)
+  //   investment  — TFSA, RRSP, ETFs (contributions build net worth)
+  //   cash        — physical cash
+  d.executeSync(`CREATE TABLE IF NOT EXISTS accounts (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    name       TEXT NOT NULL,
+    type       TEXT NOT NULL DEFAULT 'chequing',
+    emoji      TEXT NOT NULL DEFAULT '🏦',
+    color      TEXT NOT NULL DEFAULT '#1a7f6e',
+    balance    REAL NOT NULL DEFAULT 0,
+    currency   TEXT NOT NULL DEFAULT 'CAD',
+    is_default INTEGER NOT NULL DEFAULT 0,
+    sort_order INTEGER NOT NULL DEFAULT 0,
+    created_at INTEGER NOT NULL
+  )`);
+
+  // Add account_id to transactions (safe migration — existing txns get NULL)
+  try { d.executeSync(`ALTER TABLE transactions ADD COLUMN account_id INTEGER DEFAULT NULL`); } catch {}
+  // Add transfer type support: transfer txns have a to_account_id instead of wallet_id
+  try { d.executeSync(`ALTER TABLE transactions ADD COLUMN to_account_id INTEGER DEFAULT NULL`); } catch {}
+  // transaction_type: 'expense' | 'income' | 'transfer'
+  try { d.executeSync(`ALTER TABLE transactions ADD COLUMN transaction_type TEXT DEFAULT 'expense'`); } catch {}
+
   // Seed wallets if empty
   const cnt = rows(d.executeSync('SELECT COUNT(*) as c FROM wallets'))[0]?.c ?? 0;
   if (Number(cnt) === 0) {
@@ -227,21 +260,67 @@ export function resetAllSpent() {
 // ─── Transactions ─────────────────────────────────────────────────────────────
 export function loadTransactions() {
   return rows(getDb().executeSync('SELECT * FROM transactions ORDER BY date DESC')).map(r => ({
-    id: r.id, walletId: r.wallet_id, amount: r.amount,
-    desc: r.description, note: r.note, tags: parseJson(r.tags, []),
-    photo: r.photo, frequency: r.frequency, isRecurring: !!r.is_recurring,
-    recurringId: r.recurring_id, date: r.date,
+    id:              r.id,
+    walletId:        r.wallet_id,
+    accountId:       r.account_id ?? null,
+    toAccountId:     r.to_account_id ?? null,
+    transactionType: r.transaction_type ?? 'expense',
+    amount:          r.amount,
+    desc:            r.description,
+    note:            r.note,
+    tags:            parseJson(r.tags, []),
+    photo:           r.photo,
+    frequency:       r.frequency,
+    isRecurring:     !!r.is_recurring,
+    recurringId:     r.recurring_id,
+    date:            r.date,
   }));
 }
 export function insertTransaction(t) {
   const id = String(t.id ?? `${Date.now()}_${Math.random()}`);
   getDb().executeSync(
     `INSERT OR REPLACE INTO transactions
-     (id,wallet_id,amount,description,note,tags,photo,frequency,is_recurring,recurring_id,date)
-     VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
-    [id, t.walletId ?? null, t.amount, t.desc ?? '', t.note ?? '',
-     JSON.stringify(t.tags ?? []), t.photo ?? null, t.frequency ?? 'once',
-     t.isRecurring ? 1 : 0, t.recurringId ?? null, t.date ?? Date.now()]
+     (id,wallet_id,account_id,amount,description,note,tags,photo,frequency,
+      is_recurring,recurring_id,transaction_type,date)
+     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+    [id, t.walletId ?? null, t.accountId ?? null, t.amount,
+     t.desc ?? '', t.note ?? '', JSON.stringify(t.tags ?? []),
+     t.photo ?? null, t.frequency ?? 'once',
+     t.isRecurring ? 1 : 0, t.recurringId ?? null,
+     t.transactionType ?? 'expense', t.date ?? Date.now()]
+  );
+  return id;
+}
+
+/**
+ * Transfer money between two accounts.
+ * Creates a single transaction record with transaction_type='transfer'.
+ * Debits fromAccountId, credits toAccountId.
+ * No wallet category — transfers are not spending.
+ */
+export function insertTransfer({ fromAccountId, toAccountId, amount, note, date }) {
+  const d = getDb();
+  const id = `transfer_${Date.now()}_${Math.random()}`;
+
+  // Debit source account
+  const from = rows(d.executeSync('SELECT balance FROM accounts WHERE id=?', [fromAccountId]))[0];
+  if (from) d.executeSync('UPDATE accounts SET balance=? WHERE id=?',
+    [Math.round((from.balance - amount) * 100) / 100, fromAccountId]);
+
+  // Credit destination account
+  const to = rows(d.executeSync('SELECT balance FROM accounts WHERE id=?', [toAccountId]))[0];
+  if (to) d.executeSync('UPDATE accounts SET balance=? WHERE id=?',
+    [Math.round((to.balance + amount) * 100) / 100, toAccountId]);
+
+  // Record as a transaction for history
+  d.executeSync(
+    `INSERT INTO transactions
+     (id,wallet_id,account_id,to_account_id,amount,description,note,tags,
+      transaction_type,date)
+     VALUES (?,NULL,?,?,?,?,?,?,?,?)`,
+    [id, fromAccountId, toAccountId, amount,
+     note ?? 'Transfer', note ?? '', '[]',
+     'transfer', date ?? Date.now()]
   );
   return id;
 }
@@ -487,6 +566,72 @@ export function updateGiftCardBalance(id, balance) {
 }
 export function deleteGiftCardById(id) {
   getDb().executeSync('DELETE FROM gift_cards WHERE id=?', [String(id)]);
+}
+
+// ─── Accounts ─────────────────────────────────────────────────────────────────
+export function loadAccounts() {
+  return rows(getDb().executeSync(
+    'SELECT * FROM accounts ORDER BY sort_order ASC, id ASC'
+  )).map(r => ({
+    id:        r.id,
+    name:      r.name,
+    type:      r.type,
+    emoji:     r.emoji,
+    color:     r.color,
+    balance:   r.balance,
+    currency:  r.currency,
+    isDefault: !!r.is_default,
+    sortOrder: r.sort_order,
+    createdAt: r.created_at,
+  }));
+}
+
+export function insertAccount(a) {
+  const d = getDb();
+  const maxRow = rows(d.executeSync('SELECT MAX(sort_order) as m FROM accounts'))[0];
+  const nextOrder = (maxRow?.m ?? 0) + 1;
+  // Only one default account allowed — clear others if this is default
+  if (a.isDefault) d.executeSync('UPDATE accounts SET is_default=0');
+  d.executeSync(
+    `INSERT INTO accounts (name,type,emoji,color,balance,currency,is_default,sort_order,created_at)
+     VALUES (?,?,?,?,?,?,?,?,?)`,
+    [a.name, a.type ?? 'chequing', a.emoji ?? '🏦', a.color ?? '#1a7f6e',
+     a.balance ?? 0, a.currency ?? 'CAD', a.isDefault ? 1 : 0,
+     nextOrder, Date.now()]
+  );
+  return rows(d.executeSync('SELECT last_insert_rowid() as id'))[0]?.id;
+}
+
+export function updateAccount(id, a) {
+  if (a.isDefault) getDb().executeSync('UPDATE accounts SET is_default=0');
+  getDb().executeSync(
+    `UPDATE accounts SET name=?,type=?,emoji=?,color=?,currency=?,is_default=? WHERE id=?`,
+    [a.name, a.type ?? 'chequing', a.emoji ?? '🏦', a.color ?? '#1a7f6e',
+     a.currency ?? 'CAD', a.isDefault ? 1 : 0, id]
+  );
+}
+
+export function updateAccountBalance(id, balance) {
+  getDb().executeSync('UPDATE accounts SET balance=? WHERE id=?', [balance, id]);
+}
+
+/**
+ * Credit account balances represent what you OWE (liability).
+ * Net worth = sum of non-credit balances MINUS sum of credit balances.
+ * Investment accounts are included as assets.
+ */
+export function netWorth() {
+  const accounts = loadAccounts();
+  return accounts.reduce((total, a) => {
+    if (a.type === 'credit') return total - Math.abs(a.balance);
+    return total + a.balance;
+  }, 0);
+}
+
+export function deleteAccountById(id) {
+  // Null out account_id on transactions from this account rather than deleting them
+  getDb().executeSync('UPDATE transactions SET account_id=NULL WHERE account_id=?', [id]);
+  getDb().executeSync('DELETE FROM accounts WHERE id=?', [id]);
 }
 
 // ─── Custom Tags ──────────────────────────────────────────────────────────────

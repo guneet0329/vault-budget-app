@@ -179,7 +179,7 @@ function TagSection({ selectedTags, onTagsChange, customTags, onCreateTag, color
 }
 
 export default function AddExpenseModal({
-  visible, wallets, onClose, onSubmit, preWalletId, currency, customTags = [], onCreateTag,
+  visible, wallets, accounts = [], onClose, onSubmit, preWalletId, currency, customTags = [], onCreateTag,
 }) {
   const { colors, shadow } = useTheme();
 
@@ -194,6 +194,8 @@ export default function AddExpenseModal({
   const [note,       setNote]       = useState('');
   const [useTyping,  setUseTyping]  = useState(false);
   const [txnDate,    setTxnDate]    = useState(new Date());
+  // Account the money comes from — defaults to the default account if one exists
+  const [accountId,  setAccountId]  = useState(() => accounts.find(a => a.isDefault)?.id ?? null);
   const amountRef = useRef(null);
 
   const total = parseFloat(amountStr) || 0;
@@ -228,16 +230,16 @@ export default function AddExpenseModal({
     setSelectedId(preWalletId || null); setSplits([]);
     setTags([]); setPhoto(null); setRecurrence('once');
     setNote(''); setUseTyping(false); setTxnDate(new Date());
+    setAccountId(accounts.find(a => a.isDefault)?.id ?? null);
   }
 
   function handleClose() { reset(); onClose(); }
 
   function handleSubmit() {
     if (total <= 0) { Alert.alert('Enter an amount'); return; }
-    // Use the selected date but keep current time
     const dateTs = new Date(txnDate);
     dateTs.setHours(new Date().getHours(), new Date().getMinutes(), new Date().getSeconds());
-    const extra = { tags, note, photo, frequency: recurrence, date: dateTs.getTime() };
+    const extra = { tags, note, photo, frequency: recurrence, date: dateTs.getTime(), accountId };
 
     if (mode === 'single') {
       onSubmit([{ walletId: selectedId, amount: total }], desc, extra);
@@ -319,6 +321,36 @@ export default function AddExpenseModal({
               </View>
               <InlineDatePicker selectedDate={txnDate} onSelect={setTxnDate} colors={colors} />
             </View>
+
+            {/* ── Account picker ── */}
+            {accounts.length > 0 && (
+              <View style={{ marginBottom: 16 }}>
+                <Text style={{ fontSize: 12, fontWeight: '600', color: colors.text3, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 8 }}>
+                  Paid From
+                </Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false}>
+                  <View style={{ flexDirection: 'row', gap: 8 }}>
+                    {/* None option */}
+                    <TouchableOpacity
+                      style={{ paddingVertical: 8, paddingHorizontal: 12, borderRadius: 99, backgroundColor: accountId === null ? colors.tealLight : colors.surface2, borderWidth: 1.5, borderColor: accountId === null ? colors.teal : 'transparent', alignItems: 'center' }}
+                      onPress={() => setAccountId(null)}
+                    >
+                      <Text style={{ fontSize: 12, fontWeight: '600', color: accountId === null ? colors.teal : colors.text3 }}>Unlinked</Text>
+                    </TouchableOpacity>
+                    {accounts.filter(a => a.type !== 'investment').map(a => (
+                      <TouchableOpacity
+                        key={a.id}
+                        style={{ flexDirection: 'row', alignItems: 'center', gap: 6, paddingVertical: 8, paddingHorizontal: 12, borderRadius: 99, backgroundColor: accountId === a.id ? colors.tealLight : colors.surface2, borderWidth: 1.5, borderColor: accountId === a.id ? colors.teal : 'transparent' }}
+                        onPress={() => setAccountId(a.id)}
+                      >
+                        <Text style={{ fontSize: 14 }}>{a.emoji}</Text>
+                        <Text style={{ fontSize: 12, fontWeight: '600', color: accountId === a.id ? colors.teal : colors.text2 }}>{a.name}</Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+                </ScrollView>
+              </View>
+            )}
 
             {/* Description */}
             <Text style={{ fontSize: 12, fontWeight: '600', color: colors.text3, letterSpacing: 0.5, textTransform: 'uppercase', marginBottom: 6 }}>Description</Text>
